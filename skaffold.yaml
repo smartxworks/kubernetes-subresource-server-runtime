@@ -1,0 +1,15 @@
+apiVersion: skaffold/v2beta18
+kind: Config
+metadata:
+  name: subresource-server-example
+build:
+  local:
+    useBuildkit: true
+  artifacts:
+    - image: subresource-server-example
+      docker:
+        dockerfile: example/Dockerfile
+deploy:
+  kubectl:
+    manifests:
+      - example/deploy.yaml

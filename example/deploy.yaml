@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: subresource-server-example
+spec:
+  selector:
+    matchLabels:
+      name: subresource-server-example
+  template:
+    metadata:
+      labels:
+        name: subresource-server-example
+    spec:
+      serviceAccountName: subresource-server-example
+      containers:
+        - name: subresource-server-example
+          image: subresource-server-example
+          ports:
+            - containerPort: 8443
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: subresource-server-example
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: subresource-server-example-auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    namespace: default
+    name: subresource-server-example
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: subresource-server-example
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    resourceNames:
+      - extension-apiserver-authentication
+    verbs:
+      - get
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: subresource-server-example
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: subresource-server-example
+subjects:
+  - kind: ServiceAccount
+    namespace: default
+    name: subresource-server-example
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: subresource-server-example
+spec:
+  selector:
+    name: subresource-server-example
+  ports:
+    - port: 443
+      targetPort: 8443
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.subresource.example.org
+spec:
+  group: subresource.example.org
+  groupPriorityMinimum: 2000
+  version: v1alpha1
+  versionPriority: 10
+  service:
+    namespace: default
+    name: subresource-server-example
+  insecureSkipTLSVerify: true
