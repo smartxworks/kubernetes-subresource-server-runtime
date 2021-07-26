@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 type Subresource interface {
@@ -28,5 +29,5 @@ type Subresource interface {
 	GetGroupVersionResource() schema.GroupVersionResource
 	GetName() string
 	GetConnectMethods() []string
-	Connect(ctx context.Context, namespace string, name string) (http.Handler, error)
+	Connect(ctx context.Context, key types.NamespacedName) (http.Handler, error)
 }

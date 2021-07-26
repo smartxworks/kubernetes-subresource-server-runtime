@@ -40,6 +40,7 @@ import (
 	openapispec "github.com/go-openapi/spec"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -153,7 +154,11 @@ func (s *server) buildHandler() http.Handler {
 				if subresource.IsNamespaceScoped() {
 					namespace = req.PathParameter("namespace")
 				}
-				handler, err := subresource.Connect(req.Request.Context(), namespace, req.PathParameter("name"))
+				key := types.NamespacedName{
+					Name:      req.PathParameter("name"),
+					Namespace: namespace,
+				}
+				handler, err := subresource.Connect(req.Request.Context(), key)
 				if err != nil {
 					resp.WriteError(http.StatusInternalServerError, err)
 					return

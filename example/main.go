@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	genericserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -73,7 +74,7 @@ func (b *FooBar) GetConnectMethods() []string {
 	return []string{http.MethodGet}
 }
 
-func (b *FooBar) Connect(ctx context.Context, namespace string, name string) (http.Handler, error) {
+func (b *FooBar) Connect(ctx context.Context, key types.NamespacedName) (http.Handler, error) {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello, World!"))
 	}), nil
