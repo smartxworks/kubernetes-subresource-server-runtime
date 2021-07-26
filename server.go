@@ -154,10 +154,10 @@ func (s *server) buildHandler() http.Handler {
 		}
 		for _, method := range subresource.GetConnectMethods() {
 			for _, path := range paths {
-				ws.Route(ws.Method(method).Path(path).To(func(req *restful.Request, resp *restful.Response) {
+				ws.Route(ws.Method(method).Produces(restful.MIME_JSON).Path(path).To(func(req *restful.Request, resp *restful.Response) {
 					key := types.NamespacedName{
-						Name:      req.PathParameter("name"),
 						Namespace: req.PathParameter("namespace"),
+						Name:      req.PathParameter("name"),
 					}
 					handler, err := subresource.Connect(req.Request.Context(), key, fmt.Sprintf("/%s", req.PathParameter("subpath")))
 					if err != nil {
