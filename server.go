@@ -159,7 +159,7 @@ func (s *server) buildHandler() http.Handler {
 						Name:      req.PathParameter("name"),
 						Namespace: req.PathParameter("namespace"),
 					}
-					handler, err := subresource.Connect(req.Request.Context(), key, req.PathParameter("subpath"))
+					handler, err := subresource.Connect(req.Request.Context(), key, fmt.Sprintf("/%s", req.PathParameter("subpath")))
 					if err != nil {
 						resp.WriteError(http.StatusInternalServerError, err)
 						return
