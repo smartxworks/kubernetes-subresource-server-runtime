@@ -148,23 +148,25 @@ func (s *server) buildHandler() http.Handler {
 			path = fmt.Sprintf("/apis/%s/%s/{name}/%s", gv, gvr.Resource, subresource.GetName())
 		}
 
+		var paths = []string{path}
+		if subresource.IsSubpathsEnabled() {
+			paths = append(paths, fmt.Sprintf("%s/{subpath:*}", path))
+		}
 		for _, method := range subresource.GetConnectMethods() {
-			ws.Route(ws.Method(method).Path(path).To(func(req *restful.Request, resp *restful.Response) {
-				var namespace string
-				if subresource.IsNamespaceScoped() {
-					namespace = req.PathParameter("namespace")
-				}
-				key := types.NamespacedName{
-					Name:      req.PathParameter("name"),
-					Namespace: namespace,
-				}
-				handler, err := subresource.Connect(req.Request.Context(), key)
-				if err != nil {
-					resp.WriteError(http.StatusInternalServerError, err)
-					return
-				}
-				handler.ServeHTTP(resp.ResponseWriter, req.Request)
-			}))
+			for _, path := range paths {
+				ws.Route(ws.Method(method).Path(path).To(func(req *restful.Request, resp *restful.Response) {
+					key := types.NamespacedName{
+						Name:      req.PathParameter("name"),
+						Namespace: req.PathParameter("namespace"),
+					}
+					handler, err := subresource.Connect(req.Request.Context(), key, req.PathParameter("subpath"))
+					if err != nil {
+						resp.WriteError(http.StatusInternalServerError, err)
+						return
+					}
+					handler.ServeHTTP(resp.ResponseWriter, req.Request)
+				}))
+			}
 		}
 
 		resourceLists[gv] = append(resourceLists[gv], metav1.APIResource{

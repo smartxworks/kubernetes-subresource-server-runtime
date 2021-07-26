@@ -29,5 +29,6 @@ type Subresource interface {
 	GetGroupVersionResource() schema.GroupVersionResource
 	GetName() string
 	GetConnectMethods() []string
-	Connect(ctx context.Context, key types.NamespacedName) (http.Handler, error)
+	IsSubpathsEnabled() bool
+	Connect(ctx context.Context, key types.NamespacedName, subpath string) (http.Handler, error)
 }

@@ -74,7 +74,11 @@ func (b *FooBar) GetConnectMethods() []string {
 	return []string{http.MethodGet}
 }
 
-func (b *FooBar) Connect(ctx context.Context, key types.NamespacedName) (http.Handler, error) {
+func (b *FooBar) IsSubpathsEnabled() bool {
+	return false
+}
+
+func (b *FooBar) Connect(ctx context.Context, key types.NamespacedName, subpath string) (http.Handler, error) {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello, World!"))
 	}), nil
