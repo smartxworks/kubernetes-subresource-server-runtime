@@ -211,7 +211,7 @@ func (s *server) buildHandler() http.Handler {
 
 	var spec *openapispec.Swagger
 	specOnce := sync.Once{}
-	ws.Route(ws.GET("/openapi/v2").To(func(req *restful.Request, resp *restful.Response) {
+	ws.Route(ws.GET("/openapi/v2").Produces(restful.MIME_JSON).To(func(req *restful.Request, resp *restful.Response) {
 		specOnce.Do(func() {
 			spec = restfulspec.BuildSwagger(restfulspec.Config{
 				WebServices:    []*restful.WebService{ws},
