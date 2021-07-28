@@ -38,29 +38,25 @@ import (
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	openapispec "github.com/go-openapi/spec"
+	"github.com/gorilla/mux"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 )
 
-func New(client kubernetes.Interface, opts ...ServerOption) Server {
+func New(client kubernetes.Interface, opts ...ServerOption) *Server {
 	config := defaultServerConfig
 	for _, opt := range opts {
 		opt.apply(&config)
 	}
-	return &server{
+	return &Server{
 		config: config,
 		client: client,
 	}
 }
 
-type Server interface {
-	AddSubresource(subresource Subresource)
-	Start(ctx context.Context) error
-}
-
-type server struct {
+type Server struct {
 	config            serverConfig
 	client            kubernetes.Interface
 	userHeader        string
@@ -69,13 +65,11 @@ type server struct {
 	subresources      []Subresource
 }
 
-var _ Server = &server{}
-
-func (s *server) AddSubresource(subresource Subresource) {
-	s.subresources = append(s.subresources, subresource)
+func (s *Server) AddSubresource(r Subresource) {
+	s.subresources = append(s.subresources, r)
 }
 
-func (s *server) Start(ctx context.Context) error {
+func (s *Server) Start(ctx context.Context) error {
 	certFile := filepath.Join(s.config.certDir, s.config.certFileName)
 	certFileExists := true
 	if _, err := os.Stat(certFile); os.IsNotExist(err) {
@@ -132,70 +126,61 @@ func (s *server) Start(ctx context.Context) error {
 	return nil
 }
 
-func (s *server) buildHandler() http.Handler {
+func (s *Server) buildHandler() http.Handler {
 	ws := &restful.WebService{}
 
 	resourceLists := map[string][]metav1.APIResource{}
 	versionLists := map[string][]metav1.GroupVersionForDiscovery{}
-	for _, subresource := range s.subresources {
-		subresource := subresource
-		gvr := subresource.GetGroupVersionResource()
-		gv := gvr.GroupVersion().String()
-		var path string
-		if subresource.IsNamespaceScoped() {
-			path = fmt.Sprintf("/apis/%s/namespaces/{namespace}/%s/{name}/%s", gv, gvr.Resource, subresource.GetName())
-		} else {
-			path = fmt.Sprintf("/apis/%s/%s/{name}/%s", gv, gvr.Resource, subresource.GetName())
-		}
-
-		var paths = []string{path}
-		if subresource.IsSubpathsEnabled() {
-			paths = append(paths, fmt.Sprintf("%s/{subpath:*}", path))
-		}
-		for _, method := range subresource.GetConnectMethods() {
-			for _, path := range paths {
-				ws.Route(ws.Method(method).Produces(restful.MIME_JSON).Path(path).To(func(req *restful.Request, resp *restful.Response) {
-					key := types.NamespacedName{
-						Namespace: req.PathParameter("namespace"),
-						Name:      req.PathParameter("name"),
-					}
-					handler, err := subresource.Connect(req.Request.Context(), key, fmt.Sprintf("/%s", req.PathParameter("subpath")))
-					if err != nil {
-						resp.WriteError(http.StatusInternalServerError, err)
-						return
-					}
-					handler.ServeHTTP(resp.ResponseWriter, req.Request)
-				}))
+	for _, r := range s.subresources {
+		for _, method := range r.ConnectMethods {
+			keyPlacehodler := types.NamespacedName{
+				Namespace: "{namespace}",
+				Name:      "{name}",
 			}
+			path := r.Path(keyPlacehodler)
+			ws.Route(ws.Method(method).Path(path).To(func(req *restful.Request, resp *restful.Response) {
+				key := types.NamespacedName{
+					Namespace: req.PathParameter("namespace"),
+					Name:      req.PathParameter("name"),
+				}
+				handler, err := r.Connect(req.Request.Context(), key)
+				if err != nil {
+					resp.WriteError(http.StatusInternalServerError, err)
+					return
+				}
+				handler.ServeHTTP(resp.ResponseWriter, req.Request)
+			}))
 		}
 
-		resourceLists[gv] = append(resourceLists[gv], metav1.APIResource{
-			Name:       fmt.Sprintf("%s/%s", gvr.Resource, subresource.GetName()),
-			Namespaced: subresource.IsNamespaceScoped(),
+		group := r.GroupVersionResource.Group
+		version := r.GroupVersionResource.Version
+		groupVersion := fmt.Sprintf("%s/%s", group, version)
+		resourceLists[groupVersion] = append(resourceLists[groupVersion], metav1.APIResource{
+			Name:       fmt.Sprintf("%s/%s", r.GroupVersionResource.Resource, r.Name),
+			Namespaced: r.NamespaceScoped,
 		})
-
-		versionLists[gvr.Group] = append(versionLists[gvr.Group], metav1.GroupVersionForDiscovery{
-			GroupVersion: fmt.Sprintf("%s/%s", gvr.Group, gvr.Version),
-			Version:      gvr.Version,
+		versionLists[group] = append(versionLists[group], metav1.GroupVersionForDiscovery{
+			GroupVersion: groupVersion,
+			Version:      version,
 		})
 	}
 
 	var rootPaths []string
-	for gv, resources := range resourceLists {
-		gvPath := fmt.Sprintf("/apis/%s", gv)
-		ws.Route(ws.GET(gvPath).To(func(req *restful.Request, resp *restful.Response) {
+	for groupVersion, resources := range resourceLists {
+		path := fmt.Sprintf("/apis/%s", groupVersion)
+		ws.Route(ws.GET(path).Produces(restful.MIME_JSON).To(func(req *restful.Request, resp *restful.Response) {
 			resp.WriteAsJson(metav1.APIResourceList{
-				GroupVersion: gv,
+				GroupVersion: groupVersion,
 				APIResources: resources,
 			})
 		}))
-		rootPaths = append(rootPaths, gvPath)
+		rootPaths = append(rootPaths, path)
 	}
 
 	var groups []metav1.APIGroup
-	for g, versions := range versionLists {
+	for group, versions := range versionLists {
 		groups = append(groups, metav1.APIGroup{
-			Name: g,
+			Name: group,
 			ServerAddressByClientCIDRs: []metav1.ServerAddressByClientCIDR{{
 				ClientCIDR:    "0.0.0.0/0",
 				ServerAddress: "",
@@ -204,7 +189,7 @@ func (s *server) buildHandler() http.Handler {
 			Versions:         versions,
 		})
 	}
-	ws.Route(ws.GET("/apis").To(func(req *restful.Request, resp *restful.Response) {
+	ws.Route(ws.GET("/apis").Produces(restful.MIME_JSON).To(func(req *restful.Request, resp *restful.Response) {
 		resp.WriteAsJson(metav1.APIGroupList{
 			Groups: groups,
 		})
@@ -225,7 +210,7 @@ func (s *server) buildHandler() http.Handler {
 	}))
 	rootPaths = append(rootPaths, "/openapi/v2")
 
-	ws.Route(ws.GET("/").To(func(req *restful.Request, resp *restful.Response) {
+	ws.Route(ws.GET("/").Produces(restful.MIME_JSON).To(func(req *restful.Request, resp *restful.Response) {
 		resp.WriteAsJson(metav1.RootPaths{
 			Paths: rootPaths,
 		})
@@ -236,7 +221,7 @@ func (s *server) buildHandler() http.Handler {
 	wsc.Filter(restful.OPTIONSFilter())
 	wsc.Filter(func(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 		segs := strings.Split(req.Request.URL.Path, "/")
-		if len(segs) != 9 {
+		if len(segs) < 9 {
 			chain.ProcessFilter(req, resp)
 			return
 		}
@@ -302,7 +287,35 @@ func (s *server) buildHandler() http.Handler {
 
 		chain.ProcessFilter(req, resp)
 	})
-	return wsc
+
+	m := mux.NewRouter()
+	for _, r := range s.subresources {
+		if r.Route == nil {
+			continue
+		}
+
+		keyPlacehodler := types.NamespacedName{
+			Namespace: "{namespace}",
+			Name:      "{name}",
+		}
+		path := r.Path(keyPlacehodler)
+		m.PathPrefix(fmt.Sprintf("%s/", path)).HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			vars := mux.Vars(req)
+			key := types.NamespacedName{
+				Namespace: vars["namespace"],
+				Name:      vars["name"],
+			}
+			relPath := strings.TrimPrefix(req.URL.Path, r.Path(key))
+			handler, err := r.Route(req.Context(), key, relPath)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			handler.ServeHTTP(w, req)
+		})
+	}
+	m.PathPrefix("").Handler(wsc)
+	return m
 }
 
 func generateSelfSignedCert(certFile string, keyFile string) error {

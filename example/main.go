@@ -20,10 +20,12 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	genericserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -42,44 +44,42 @@ func main() {
 	}
 
 	s := subresourceserver.New(client)
-	s.AddSubresource(&FooBar{})
+	s.AddSubresource(NewFooBarSubresource())
 
-	if err := s.Start(genericserver.SetupSignalContext()); err != nil {
+	shutdownHandler := make(chan os.Signal, 2)
+	ctx, cancel := context.WithCancel(context.Background())
+	signal.Notify(shutdownHandler, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-shutdownHandler
+		cancel()
+		<-shutdownHandler
+		os.Exit(1)
+	}()
+
+	if err := s.Start(ctx); err != nil {
 		log.Fatalf("error running server: %s", err)
 	}
 }
 
-type FooBar struct {
-}
-
-var _ subresourceserver.Subresource = &FooBar{}
-
-func (b *FooBar) IsNamespaceScoped() bool {
-	return true
-}
-
-func (b *FooBar) GetGroupVersionResource() schema.GroupVersionResource {
-	return schema.GroupVersionResource{
-		Group:    "subresource.example.org",
-		Version:  "v1alpha1",
-		Resource: "foos",
+func NewFooBarSubresource() subresourceserver.Subresource {
+	return subresourceserver.Subresource{
+		NamespaceScoped: true,
+		GroupVersionResource: schema.GroupVersionResource{
+			Group:    "subresource.example.org",
+			Version:  "v1alpha1",
+			Resource: "foos",
+		},
+		Name:           "bar",
+		ConnectMethods: []string{http.MethodGet},
+		Connect: func(ctx context.Context, key types.NamespacedName) (http.Handler, error) {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte("Hello, World!"))
+			}), nil
+		},
+		Route: func(ctx context.Context, key types.NamespacedName, path string) (http.Handler, error) {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte(path))
+			}), nil
+		},
 	}
-}
-
-func (b *FooBar) GetName() string {
-	return "bar"
-}
-
-func (b *FooBar) GetConnectMethods() []string {
-	return []string{http.MethodGet}
-}
-
-func (b *FooBar) IsSubpathsEnabled() bool {
-	return false
-}
-
-func (b *FooBar) Connect(ctx context.Context, key types.NamespacedName, subpath string) (http.Handler, error) {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, World!"))
-	}), nil
 }

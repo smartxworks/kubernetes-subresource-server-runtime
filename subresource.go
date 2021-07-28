@@ -18,17 +18,32 @@ package subresourceserver
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 )
 
-type Subresource interface {
-	IsNamespaceScoped() bool
-	GetGroupVersionResource() schema.GroupVersionResource
-	GetName() string
-	GetConnectMethods() []string
-	IsSubpathsEnabled() bool
-	Connect(ctx context.Context, key types.NamespacedName, subpath string) (http.Handler, error)
+type Subresource struct {
+	NamespaceScoped      bool
+	GroupVersionResource schema.GroupVersionResource
+	Name                 string
+	ConnectMethods       []string
+	Connect              func(ctx context.Context, key types.NamespacedName) (http.Handler, error)
+	Route                func(ctx context.Context, key types.NamespacedName, path string) (http.Handler, error)
+}
+
+func (r *Subresource) Path(key types.NamespacedName) string {
+	var path string
+	if r.NamespaceScoped {
+		path = fmt.Sprintf("/apis/%s/%s/namespaces/%s/%s/%s/%s",
+			r.GroupVersionResource.Group, r.GroupVersionResource.Version, key.Namespace,
+			r.GroupVersionResource.Resource, key.Name, r.Name)
+	} else {
+		path = fmt.Sprintf("/apis/%s/%s/%s/%s/%s",
+			r.GroupVersionResource.Group, r.GroupVersionResource.Version,
+			r.GroupVersionResource.Resource, key.Name, r.Name)
+	}
+	return path
 }
