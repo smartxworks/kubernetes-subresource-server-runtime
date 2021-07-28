@@ -61,8 +61,8 @@ func main() {
 	}
 }
 
-func NewFooBarSubresource() subresourceserver.Subresource {
-	return subresourceserver.Subresource{
+func NewFooBarSubresource() *subresourceserver.Subresource {
+	return &subresourceserver.Subresource{
 		NamespaceScoped: true,
 		GroupVersionResource: schema.GroupVersionResource{
 			Group:    "subresource.example.org",

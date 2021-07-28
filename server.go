@@ -62,10 +62,10 @@ type Server struct {
 	userHeader        string
 	groupHeader       string
 	extraHeaderPrefix string
-	subresources      []Subresource
+	subresources      []*Subresource
 }
 
-func (s *Server) AddSubresource(r Subresource) {
+func (s *Server) AddSubresource(r *Subresource) {
 	s.subresources = append(s.subresources, r)
 }
 
@@ -132,6 +132,7 @@ func (s *Server) buildHandler() http.Handler {
 	resourceLists := map[string][]metav1.APIResource{}
 	versionLists := map[string][]metav1.GroupVersionForDiscovery{}
 	for _, r := range s.subresources {
+		r := r
 		for _, method := range r.ConnectMethods {
 			keyPlacehodler := types.NamespacedName{
 				Namespace: "{namespace}",
