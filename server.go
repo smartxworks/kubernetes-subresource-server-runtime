@@ -106,6 +106,13 @@ func (s *Server) Start(ctx context.Context) error {
 		TLSConfig: &tls.Config{
 			ClientAuth: tls.RequireAndVerifyClientCert,
 			ClientCAs:  clientCAs,
+			GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+				if err != nil {
+					return nil, err
+				}
+				return &cert, nil
+			},
 		},
 	}
 
@@ -118,7 +125,7 @@ func (s *Server) Start(ctx context.Context) error {
 		close(idleConnsClosed)
 	}()
 
-	if err := server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+	if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 		return err
 	}
 
