@@ -37,28 +37,14 @@ subjects:
     name: subresource-server-example
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: RoleBinding
 metadata:
   name: subresource-server-example
-rules:
-  - apiGroups:
-      - ""
-    resources:
-      - configmaps
-    resourceNames:
-      - extension-apiserver-authentication
-    verbs:
-      - get
-      - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: subresource-server-example
+  namespace: kube-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: subresource-server-example
+  kind: Role
+  name: extension-apiserver-authentication-reader
 subjects:
   - kind: ServiceAccount
     namespace: default
