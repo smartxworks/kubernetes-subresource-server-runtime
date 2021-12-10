@@ -298,6 +298,7 @@ func (s *Server) buildHandler() http.Handler {
 
 	m := mux.NewRouter()
 	for _, r := range s.subresources {
+		r := r
 		if r.Route == nil {
 			continue
 		}
