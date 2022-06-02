@@ -3,6 +3,8 @@
 [![build](https://github.com/smartxworks/kubernetes-subresource-server-runtime/actions/workflows/build.yml/badge.svg)](https://github.com/smartxworks/kubernetes-subresource-server-runtime/actions/workflows/build.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 
+**⚠️ DEPRECATED: CONSIDER USING [apiserver-runtime](https://github.com/kubernetes-sigs/apiserver-runtime) INSTEAD.**
+
 The Kubernetes subresource-server-runtime project is a Go library for building subresource servers. Check out the [example](/example) to get more details and usage.
 
 ## License
